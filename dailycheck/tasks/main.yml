@@ -1,0 +1,52 @@
+---
+- name: Daily Check List hostname,Filesystem
+  shell: "{{ item }}"
+  with_items:
+    - echo `hostname -s` > /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `cat /etc/fstab |grep -v 'fstab\|Created\|Accessible\|swap\|efi\|shm' |awk {'print $2'} |grep -o '[^${printf '\t'}].*'` > /tmp/fstab.txt
+    - echo `mount |egrep xfs\|ext4 |awk {'print $3'}` > /tmp/mount.txt
+    - echo `df -lhT |egrep -v devtmpfs\|tmpfs\|Type\|Mounted\|efi\|mnt |awk {'print $7'}` > /tmp/df.txt
+- name: Check Filesystem Mounted
+  shell: |
+    if [[ '/usr/bin/diff3 --ed /tmp/fstab.txt /tmp/mount.txt /tmp/df.txt >/dev/null 2>&1' ]];
+    then
+    rm /tmp/fstab.txt /tmp/mount.txt /tmp/df.txt
+    echo -n "Yes," >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    else
+    echo -n "No," >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    fi
+
+- name: Daily Check List
+  shell: "{{ item }}"
+  with_items:
+    - echo `uptime | awk {'print $3,$4'} |cut -d ',' -f 1` >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `top -bn1 |grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" |awk {'print 100 - $1"%"'}` >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `free -m |awk /Mem/ |awk {'print $3/$2*100'}` >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `free -m |awk /Swap/ |awk {'print $3/$2*100'}` >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `df -Ph / |awk  {'print $5,$6'} |cut -d '%' -f 1 |grep -v Use` >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `systemctl status network |grep Active |awk {'print $2'} > /dev/null && echo "Yes," || echo "No,"` >> /tmp/dailycheck-{{ ansible_hostname }}.txt
+    - echo `cat /tmp/dailycheck-{{ ansible_hostname }}.txt | awk 'ORS=","'` > /tmp/dailycheck-{{ ansible_hostname }}.csv
+
+- name: Storing Dailycheck Data in txt Format
+  fetch:
+    src: /tmp/dailycheck-{{ ansible_hostname }}.txt
+    dest: /root/dailycheck/files/outputtxt/
+    flat: yes
+- name: Storing Dailycheck Data in CSV Format
+  fetch:
+    src: /tmp/dailycheck-{{ ansible_hostname }}.csv
+    dest: /root/dailycheck/files/outputcsv/
+    flat: yes
+
+- name: Consolidating Data
+  run_once: yes
+  delegate_to: localhost
+  shell: "{{ item }}"
+  with_items:
+    - echo "HOSTNAME,Filesystem_Mounted,UPTIME,CPU%Utilization,MEMORY_Utilization,SWAP_Utilization,root_Utilization,Network_Service" > /root/dailycheck/files/outputcsv/final_dailycheck_$( date '+%Y-%m-%d' ).csv
+    - cat /root/dailycheck/files/outputcsv/dailycheck-*.csv >> /root/dailycheck/files/outputcsv/final_dailycheck_$( date '+%Y-%m-%d' ).csv
+    - rm -rf /root/dailycheck/files/outputcsv/dailycheck-*.csv
+    - rm -rf /root/dailycheck/files/outputtxt/*
+
+
+ 

@@ -1,0 +1,4 @@
+HOSTNAME,Filesystem_Mounted,UPTIME,CPU%Utilization,MEMORY_Utilization,SWAP_Utilization,root_Utilization,Network_Service
+controler,Yes,1:22,18.8%,10.2509,0,89,Yes,,
+node1,Yes,1:22,23.8%,22.2904,0,52,Yes,,
+node2,Yes,1:22,25%,20.0409,0,50,Yes,,
